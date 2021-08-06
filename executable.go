@@ -64,11 +64,11 @@ func execute(
 	client *Client,
 	request request,
 	shouldRetry func(request, response) executionState,
-	makeRequest func(request) protoRequest,
+	protoReq protoRequest,
 	advanceRequest func(request),
 	getNodeAccountID func(request) AccountID,
 	getMethod func(request, *channel) method,
-	mapStatusError func(request, response, *NetworkName) error,
+	mapStatusError func(request, response) error,
 	mapResponse func(request, response, AccountID, protoRequest) (intermediateResponse, error),
 ) (intermediateResponse, error) {
 	var maxAttempts int
@@ -88,8 +88,9 @@ func execute(
 	var errPersistent error
 
 	for attempt = int64(0); attempt < int64(maxAttempts); attempt++ {
-		protoRequest := makeRequest(request)
+		protoRequest := protoReq
 		nodeAccountID := getNodeAccountID(request)
+		println("execute 3")
 
 		node, ok := client.network.networkNodes[nodeAccountID]
 		if !ok {
@@ -133,17 +134,18 @@ func execute(
 
 		retry := shouldRetry(request, resp)
 
+		println("node", node.accountID.String())
 		switch retry {
 		case executionStateRetry:
 			if attempt <= int64(maxAttempts) {
 				delayForAttempt(attempt)
 				continue
 			} else {
-				errPersistent = mapStatusError(request, resp, client.networkName)
+				errPersistent = mapStatusError(request, resp)
 				break
 			}
 		case executionStateError:
-			return intermediateResponse{}, mapStatusError(request, resp, client.networkName)
+			return intermediateResponse{}, mapStatusError(request, resp)
 		case executionStateFinished:
 			return mapResponse(request, resp, node.accountID, protoRequest)
 		}
